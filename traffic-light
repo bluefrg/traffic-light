@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+
+# Setup default values for variables
+VERSION="1.0.0"
+API_URL="https://h3ocqe6haf.execute-api.us-east-1.amazonaws.com/v1/"
+API_METHOD="setryg"
+API_KEY=false
+API_PAYLOAD=false
+CURL_BIN=$(which curl)
+
+function usage() {
+    cat <<EOM
+##### traffic-light #####
+Simple script for changing light sequences on the traffic light in the office
+https://github.com/bluefrg/traffic-light
+
+Required arguments:
+    -d | --data           Payload. The request to pass to the traffic light.
+    -k | --api-key        API Key. The key needed to authenticate the request. May also be set by 
+                            TRAFFIC_LIGHT_API_KEY environment variable.
+
+Optional arguments:
+    -u | --url            The URL endpoint to control the traffic light.
+    -m | --method         The action to trigger on the traffic light. 
+         --version        Display the version of this script
+
+Requirements:
+    curl:  curl is a tool to transfer data from or to a server.
+
+Examples:
+  Simple way to set traffic light to Green:
+
+    traffic-light -d '{"ryg": "001"}'
+
+  All options:
+
+    traffic-light -k V2Gsc3oseW79 -u https://traffic-light.example.ca/v1/ -m setryg -d '{"ryg": "011"}'
+
+EOM
+
+    exit 3
+}
+
+# Check requirements
+function require() {
+    command -v "$1" > /dev/null 2>&1 || {
+        echo "Some of the required software is not installed:"
+        echo "    please install $1" >&2;
+        exit 4;
+    }
+}
+
+function assertRequiredArgumentsSet() {
+
+    if [ -z ${TRAFFIC_LIGHT_API_KEY+x} ];
+      then unset TRAFFIC_LIGHT_API_KEY
+      else
+        API_KEY=$TRAFFIC_LIGHT_API_KEY
+    fi
+
+    if [ API_KEY == false ]; then
+        echo "API_KEY is required. You can pass the value using -k, --api-key, or set the TRAFFIC_LIGHT_API_KEY environment variable"
+        exit 7
+    fi
+
+    if [ API_PAYLOAD == false ]; then
+        echo "PAYLOAD is required. You can pass the value using -d or --data"
+        exit 8
+    fi
+
+}
+
+function sendCommand() {
+    $CURL_BIN -X POST "$API_URL$API_METHOD" -H "x-api-key: $API_KEY" -d "$API_PAYLOAD"
+}
+
+if [ "$BASH_SOURCE" == "$0" ]; then
+    set -o errexit
+    set -o pipefail
+    set -u
+    set -e
+    # If no args are provided, display usage information
+    if [ $# == 0 ]; then usage; fi
+
+    # Make sure we have out dependancies 
+    require curl
+
+    # Loop through arguments, two at a time for key and value
+    while [[ $# -gt 0 ]]
+    do
+        key="$1"
+
+        case $key in
+            -k|--api-key)
+                API_KEY="$2"
+                shift # past argument
+                ;;
+            -u|--url)
+                API_URL="$2"
+                shift # past argument
+                ;;
+            -m|--method)
+                API_METHOD="$2"
+                shift # past argument
+                ;;
+            -d|--data)
+                API_PAYLOAD="$2"
+                shift # past argument
+                ;;
+            --version)
+                echo ${VERSION}
+                exit 0
+                ;;
+            *)
+                usage
+                exit 2
+            ;;
+        esac
+        shift # past argument or value
+    done
+
+    # Check that required arguments are provided
+    assertRequiredArgumentsSet
+
+    # Change the traffic light
+    echo "Sending command to traffic light"
+    sendCommand
+
+    exit 0
+
+fi
